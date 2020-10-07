@@ -1,0 +1,117 @@
+# This file is the entry point to configure your own services.
+# Files in the packages/ subdirectory configure your dependencies.
+
+# Put parameters here that don't need to change on each machine where the app is deployed
+# https://symfony.com/doc/current/best_practices/configuration.html#application-related-configuration
+parameters:
+#    elasticsearch: '~'
+    elasticsearch: '~'
+
+services:
+  # default configuration for services in *this* file
+  _defaults:
+    autowire: true      # Automatically injects dependencies in your services.
+    autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+
+  # makes classes in src/ available to be used as services
+  # this creates a service per class whose id is the fully-qualified class name
+  App\:
+    resource: '../src/'
+    exclude:
+      - '../src/DependencyInjection/'
+      - '../src/Entity/'
+      - '../src/Kernel.php'
+      - '../src/Tests/'
+
+  # controllers are imported separately to make sure services can be injected
+  # as action arguments even if you don't extend any base controller class
+  App\Infrastructure\Ui\Http\Rest\Controller\:
+    resource: '../src/Infrastructure/Ui/Http/Rest/Controller/'
+    tags: [ 'controller.service_arguments' ]
+
+  # add more service definitions when explicit configuration is needed
+  # please note that last definitions always *replace* previous ones
+
+  Broadway\EventStore\EventStore: '@broadway.event_store'
+  Broadway\EventHandling\EventBus: '@broadway.event_handling.event_bus'
+
+  App\Domain\ReadModel\PostProjector:
+    tags:
+      - { name: broadway.domain.event_listener}
+
+  App\Domain\ReadModel\AuthorProjector:
+    tags:
+      - { name: broadway.domain.event_listener }
+
+  App\Infrastructure\Persistence\Broadway\BroadwayPostWriteRepository:
+  App\Domain\Repository\PostWriteModelRepository: '@App\Infrastructure\Persistence\Broadway\BroadwayPostWriteRepository'
+
+  App\Infrastructure\Persistence\Broadway\BroadwayAuthorWriteRepository:
+  App\Domain\Repository\AuthorWriteModelRepository: '@App\Infrastructure\Persistence\Broadway\BroadwayAuthorWriteRepository'
+
+
+  post.readmodel.repository:
+    class: Broadway\ReadModel\Repository
+    factory: [ '@broadway.read_model.elasticsearch.repository_factory',create ]
+    arguments: [ 'postreadmodel','App\Domain\ReadModel\PostReadModel']
+
+  author.readmodel.repository:
+    class: Broadway\ReadModel\Repository
+    factory: [ '@broadway.read_model.elasticsearch.repository_factory',create ]
+    arguments: [ 'authorreadmodel','App\Domain\ReadModel\AuthorReadModel']
+
+  App\Infrastructure\Persistence\Broadway\ReadModel\BroadwayPostReadModelRepository:
+    arguments:
+      $repository: '@post.readmodel.repository'
+  App\Domain\ReadModel\PostReadModelRepository: '@App\Infrastructure\Persistence\Broadway\ReadModel\BroadwayPostReadModelRepository'
+
+  App\Infrastructure\Persistence\Broadway\ReadModel\BroadwayAuthorReadModelRepository:
+    arguments:
+      $repository: '@author.readmodel.repository'
+  App\Domain\ReadModel\AuthorReadModelRepository: '@App\Infrastructure\Persistence\Broadway\ReadModel\BroadwayAuthorReadModelRepository'
+
+  serialize_json_objects:
+    class: Symfony\Component\Serializer\Serializer
+    arguments:
+      - [ '@serializer.normalizer.datetime','@serializer.normalizer.object' ]
+      - [ '@serializer.encoder.json' ]
+
+  serialize_xml_objects:
+    class: Symfony\Component\Serializer\Serializer
+    arguments:
+      - [ '@serializer.normalizer.datetime','@serializer.normalizer.object' ]
+      - [ '@serializer.encoder.xml' ]
+
+  serialize_json_xml_objects:
+    class: Symfony\Component\Serializer\Serializer
+    arguments:
+      - [ '@serializer.normalizer.datetime','@serializer.normalizer.object' ]
+      - [ '@serializer.encoder.xml', '@serializer.encoder.json' ]
+
+  App\Infrastructure\Ui\Http\Rest\Controller\PostController:
+    arguments:
+      $commandBus: '@blogging.command_bus'
+      $queryBus: '@blogging.query_bus'
+
+  App\Infrastructure\Ui\Cli\CreateEventStoreCommand:
+    arguments:
+      $entityManager: '@doctrine.orm.entity_manager'
+      $eventStore: '@broadway.event_store.dbal'
+    tags: [ console.command ]
+
+  App\Infrastructure\Ui\Http\Rest\EventListener\ExceptionListener:
+    tags:
+      - { name: kernel.event_listener, event: kernel.exception }
+
+  App\Infrastructure\Ui\Http\Rest\EventListener\ResponseListener:
+    arguments:
+      $serializer: "@serialize_json_xml_objects"
+    tags:
+      - { name: kernel.event_listener, event: kernel.response }
+
+  App\Infrastructure\Ui\Http\Rest\EventListener\RequestListener:
+    tags:
+      - { name: kernel.event_listener, event: kernel.request }
+
+#  App\Infrastructure\Ui\Cli\SyncPostProjectionCommand:
+#    tags: [ console.command ]

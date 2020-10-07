@@ -93,6 +93,10 @@ class BlogChoreographyTest extends WebTestCase
 
         self::assertEquals(Response::HTTP_OK, $this->client->getResponse()->getStatusCode());
         self::assertEquals('ee6b7567-a76b-4f7e-9c94-9e620ec96798', $postInfoDecoded['author']['id']);
+        self::assertEquals('44d5b99d-d26f-433f-bdbf-9bd808e95499', $postInfoDecoded['id']);
+        self::assertEquals('Title', $postInfoDecoded['title']);
+        self::assertEquals('description', $postInfoDecoded['description']);
+        self::assertEquals('content', $postInfoDecoded['content']);
     }
 
     public static function tearDownAfterClass(): void
